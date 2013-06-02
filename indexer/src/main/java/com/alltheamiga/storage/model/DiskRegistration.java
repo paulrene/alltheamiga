@@ -13,6 +13,8 @@ public class DiskRegistration {
     @XStreamAsAttribute
     private String filename;
     @XStreamAsAttribute
+    private String originalFilename;
+    @XStreamAsAttribute
     private Date ingestTime;
     private AmigaDisk disk;
 
@@ -50,4 +52,13 @@ public class DiskRegistration {
     public void setSource(String source) {
         this.source = source;
     }
+    
+    public String getOriginalFilename() {
+        return originalFilename;
+    }
+    
+    public void setOriginalFilename(String originalFilename) {
+        this.originalFilename = originalFilename;
+    }
+
 }

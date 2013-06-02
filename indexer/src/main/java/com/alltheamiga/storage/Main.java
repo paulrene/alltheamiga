@@ -3,6 +3,9 @@ package com.alltheamiga.storage;
 import java.io.File;
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
+import java.util.Iterator;
+
+import org.apache.commons.io.FileUtils;
 
 /**
  * 
@@ -12,18 +15,37 @@ import java.security.NoSuchAlgorithmException;
  * 
  */
 public class Main {
-
+    
     public static void main(String[] args) throws NoSuchAlgorithmException, IOException {
-        Storage storage = new Storage(new File("database.xml"), new File("diskfiles"));
+        if(args.length!=4) {
+            System.err.println("Usage: Storage <databaseFilename> <databaseFileStoragePath> <dropboxForDiskImagesPath> <deleteFilesFromDropboxAfterIngest?>");
+            System.exit(0);
+        }
+        
+        String databaseFilename = args[0];
+        String databaseFileStoragePath = args[1];
+        String dropboxForDiskImagesPath = args[2];
+        Boolean deleteFilesFromDropboxAfterIngest = new Boolean(args[3]);
+        
+        Storage storage = new Storage(new File(databaseFilename), new File(databaseFileStoragePath));
 
         try {
-            File dropbox = new File("dropbox");
-            File[] filesInDropbox = dropbox.listFiles();
-            for (File file : filesInDropbox) {
-                storage.addFloppyDiskImage("admin", file);
+            File dropbox = new File(dropboxForDiskImagesPath);
+            for(Iterator<File> i = FileUtils.iterateFiles(dropbox, new String[] { "adf" }, true);i.hasNext();) {
+                File file = i.next();
+                try {
+                    System.out.print("Disk "+file.getName());
+                    storage.addFloppyDiskImage("internal", file);
+                    System.out.println(" added to database.");
+                    if(deleteFilesFromDropboxAfterIngest) {
+                        file.delete();
+                    }
+                } catch (RuntimeException e) {
+                    System.err.println(" caused an Excepton: "+e.getClass().getName()+" ("+e.getMessage()+")");
+                } 
             }
-        } catch (Throwable t) {
-            t.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
 
         storage.persist();

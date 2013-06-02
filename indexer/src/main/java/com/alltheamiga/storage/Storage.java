@@ -12,6 +12,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.Formatter;
 
+import org.apache.commons.io.FileUtils;
 import org.dmpp.adf.app.Directory;
 import org.dmpp.adf.app.DosFile;
 import org.dmpp.adf.app.UserFile;
@@ -29,7 +30,6 @@ import com.alltheamiga.storage.model.AmigaFile;
 import com.alltheamiga.storage.model.DiskDatabase;
 import com.alltheamiga.storage.model.DiskRegistration;
 import com.thoughtworks.xstream.XStream;
-import com.thoughtworks.xstream.io.xml.StaxDriver;
 
 public class Storage {
 
@@ -43,14 +43,24 @@ public class Storage {
         this.databaseFile = databaseFile;
         this.xs = createXStream();
         if (this.databaseFile.exists()) {
+            System.out.println("Loading database from: "+databaseFile);
             this.database = (DiskDatabase) xs.fromXML(databaseFile);
+            System.out.println(getDatabaseStats());
         } else {
             this.database = new DiskDatabase();
         }
     }
 
+    private String getDatabaseStats() {
+        StringBuilder o = new StringBuilder();
+        o.append("Database Statistics\n");
+        o.append("  Registrations: "+database.getDiskRegistrations().size()+"\n");
+        o.append("      LastSaved: "+database.getLastSaved()+"\n");
+        return o.toString();
+    }
+
     private XStream createXStream() {
-        XStream xs = new XStream(new StaxDriver());
+        XStream xs = new XStream();
         xs.processAnnotations(AmigaDisk.class);
         xs.processAnnotations(AmigaDirectory.class);
         xs.processAnnotations(AmigaFile.class);
@@ -59,10 +69,10 @@ public class Storage {
         return xs;
     }
 
-    public void addFloppyDiskImage(String source, File diskImageFile) throws NoSuchAlgorithmException, IOException {
+    public void addFloppyDiskImage(String source, File diskImageFile) throws NoSuchAlgorithmException, IOException {        
         // Create Registration
         DiskRegistration diskReg = new DiskRegistration();
-        diskReg.setFilename(diskImageFile.getName());
+        diskReg.setOriginalFilename(diskImageFile.getName());
         diskReg.setIngestTime(new Date());
         diskReg.setSource(source);
 
@@ -75,11 +85,15 @@ public class Storage {
 
         disk.setRootDirectory(createAmigaDirectoryFromDirectory(userVolume.rootDirectory()));
 
-        diskImageFile.renameTo(new File(diskFileDirectory.getPath(), disk.getHashCode()+".adf"));
-
+        // Copy file from dropbox into database disk storage and append hashcode to filename.
+        FileUtils.copyFileToDirectory(diskImageFile, diskFileDirectory, true);
+        File copiedFile = new File(diskFileDirectory.getPath(), diskImageFile.getName());
+        File newFile =new File(diskFileDirectory.getPath(), disk.getHashCode()+"_"+diskImageFile.getName()); 
+        copiedFile.renameTo(newFile);
+        
+        diskReg.setFilename(newFile.getName());
         diskReg.setDisk(disk);
         addDiskRegistration(diskReg);
-
     }
 
     private AmigaDirectory createAmigaDirectoryFromDirectory(Directory directory) {
@@ -146,7 +160,7 @@ public class Storage {
             java.util.List<DiskRegistration> diskRegistrations = database.getDiskRegistrations();
             for (DiskRegistration dr : diskRegistrations) {
                 if(diskRegistration.getDisk().getHashCode().equals(dr.getDisk().getHashCode())) {
-                    System.err.println("Disk "+diskRegistration.getDisk().getVolumeName()+" with hash "+diskRegistration.getDisk().getHashCode()+" is already in the database.");
+                    System.err.println("Disk "+diskRegistration.getFilename()+" with hash "+diskRegistration.getDisk().getHashCode()+" is already in the database.");
                     return false;
                 }
             }
@@ -210,6 +224,10 @@ public class Storage {
             }
             return formatter.toString();
         }
+    }
+
+    public DiskDatabase getDatabase() {
+        return database;
     }
 
 }
