@@ -1,38 +1,9 @@
 package com.alltheamiga.storage;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Date;
-import java.util.Formatter;
-
-import org.apache.commons.io.FileUtils;
-import org.dmpp.adf.app.Directory;
-import org.dmpp.adf.app.DosFile;
-import org.dmpp.adf.app.UserFile;
-import org.dmpp.adf.app.UserVolume;
-import org.dmpp.adf.logical.LogicalVolume;
-import org.dmpp.adf.physical.PhysicalVolume;
-import org.dmpp.adf.physical.PhysicalVolumeFactory;
-
-import scala.collection.Iterator;
-import scala.collection.immutable.List;
-
-import com.alltheamiga.storage.model.AmigaDirectory;
-import com.alltheamiga.storage.model.AmigaDisk;
-import com.alltheamiga.storage.model.AmigaFile;
-import com.alltheamiga.storage.model.DiskDatabase;
-import com.alltheamiga.storage.model.DiskRegistration;
-import com.thoughtworks.xstream.XStream;
 
 public class Storage {
 
+    /*
     private File diskFileDirectory;
     private File databaseFile;
     private DiskDatabase database;
@@ -229,5 +200,5 @@ public class Storage {
     public DiskDatabase getDatabase() {
         return database;
     }
-
+*/
 }
