@@ -1,6 +1,9 @@
 package com.alltheamiga.indexer;
 
+import java.awt.Image;
+import java.awt.image.BufferedImage;
 import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -12,9 +15,13 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Formatter;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import javax.imageio.ImageIO;
 
 import net.lingala.zip4j.core.ZipFile;
 import net.lingala.zip4j.exception.ZipException;
@@ -27,6 +34,8 @@ import org.dmpp.adf.app.UserVolume;
 import org.dmpp.adf.logical.LogicalVolume;
 import org.dmpp.adf.physical.PhysicalVolume;
 import org.dmpp.adf.physical.PhysicalVolumeFactory;
+import org.dmpp.infolib.AmigaIcon;
+import org.dmpp.infolib.AmigaInfoReader;
 
 import scala.collection.Iterator;
 import scala.collection.immutable.List;
@@ -35,8 +44,10 @@ import com.alltheamiga.database.Storage;
 import com.alltheamiga.database.model.AmigaDirectory;
 import com.alltheamiga.database.model.AmigaDisk;
 import com.alltheamiga.database.model.AmigaFile;
+import com.alltheamiga.database.model.Bitmap;
 import com.alltheamiga.database.model.DiskRegistration;
 import com.alltheamiga.database.model.DiskRegistrationFlag;
+import com.alltheamiga.database.model.FileData;
 import com.alltheamiga.database.model.types.Platform;
 import com.alltheamiga.database.model.types.VideoMode;
 import com.alltheamiga.indexer.amitools.XdfTool;
@@ -45,6 +56,7 @@ import com.alltheamiga.indexer.tosec.MediaInformation;
 import com.alltheamiga.indexer.tosec.TosecException;
 import com.alltheamiga.indexer.tosec.TosecFile;
 import com.alltheamiga.indexer.tosec.TosecFileParser;
+import com.alltheamiga.utils.GZip;
 import com.alltheamiga.utils.KMPMatch;
 
 public class Indexer {
@@ -54,6 +66,8 @@ public class Indexer {
     private Storage storage;
     private TosecFileParser tosecFileParser;
     private XdfTool xdfTool;
+    private Map<String, Bitmap> bitmapCache = new HashMap<>();
+    private Map<String, FileData> fileDataCache = new HashMap<>();
 
     public Indexer(Storage storage, File workDir) {
         this.workDir = workDir;
@@ -67,10 +81,29 @@ public class Indexer {
         FileUtils.forceMkdir(tempDir);
         copyAndUnpackFileToTempDir(originalFile, tempDir);
         processDirectory(tempDir, tempDir);
-        // FileUtils.forceDelete(tempDir);
+        try {
+            FileUtils.forceDelete(tempDir);
+        } catch (FileNotFoundException e) {
+            log(2, "Could not delete temp directory. You need to manually clean it up!");
+        }
     }
 
-    private void processFile(File fileToProcess, File tempDir) throws IOException {
+    private void processDirectory(File directory, File tempDir) throws IOException {
+        File[] files = directory.listFiles();
+        for (File file : files) {
+            if (file.isDirectory()) {
+                processDirectory(file, tempDir);
+            } else {
+                processFile(file, tempDir);
+            }
+        }
+    }
+
+    private synchronized void processFile(File fileToProcess, File tempDir) throws IOException {
+        bitmapCache.clear();
+        fileDataCache.clear();
+        storage.begin();
+
         log(1, "Processing file \"" + fileToProcess.getName() + "\"");
         String filename = fileToProcess.getName();
         DiskRegistration diskReg = new DiskRegistration();
@@ -82,30 +115,38 @@ public class Indexer {
         disk.setDiskRegistration(diskReg);
         diskReg.setAmigaDisk(disk);
 
-        storage.begin();
         storage.persist(diskReg);
         storage.commit();
+
+        bitmapCache.clear();
+        fileDataCache.clear();
     }
 
     private AmigaDisk createAmigaDisk(File adfFile, File tempDir) throws IOException {
-        AmigaDisk disk = new AmigaDisk();
-        File unpackedRoot = null;
-        boolean unpacked = xdfTool.unpack(adfFile, tempDir);
-        if (unpacked) {
-            String volumeName = xdfTool.findVolumeName(tempDir);
-            unpackedRoot = new File(tempDir, volumeName);
-            File bootcodeFile = new File(tempDir, volumeName + ".bootcode");
-            if (bootcodeFile.exists()) {
-                disk.setBootBlockData(FileUtils.readFileToByteArray(bootcodeFile));
+        String hashCode = sha1OfFile(adfFile);
+        AmigaDisk disk = storage.findAmigaDiskByHashCode(hashCode);
+        if (disk == null) {
+            disk = new AmigaDisk();
+            File unpackedRoot = null;
+            boolean unpacked = xdfTool.unpack(adfFile, tempDir);
+            if (unpacked) {
+                String volumeName = xdfTool.findVolumeName(tempDir);
+                unpackedRoot = new File(tempDir, volumeName);
+                File bootcodeFile = new File(tempDir, volumeName + ".bootcode");
+                if (bootcodeFile.exists()) {
+                    disk.setBootBlockData(FileUtils.readFileToByteArray(bootcodeFile));
+                }
+                log(2, "Volume " + volumeName + " unpacked");
             }
-            log(2, "Volume " + volumeName + " unpacked");
+            disk.setHashCode(sha1OfFile(adfFile));
+            populateDiskWithADF(adfFile, unpackedRoot, disk);
         }
-        return populateDiskWithADF(adfFile, unpackedRoot, disk);
+        return disk;
     }
 
     private AmigaDisk populateDiskWithADF(File adfFile, File unpackedRoot, AmigaDisk disk) throws IOException {
-        disk.setHashCode(sha1OfFile(adfFile));
-        disk.setData(FileUtils.readFileToByteArray(adfFile));
+        byte[] diskData = FileUtils.readFileToByteArray(adfFile);
+        disk.setData(GZip.compress(diskData));
         try {
             // Read ADF image and create UserVolume
             UserVolume userVolume = loadUserVolume(adfFile);
@@ -125,7 +166,7 @@ public class Indexer {
             disk.setModified(userVolume.lastModificationTime());
             disk.setRootDirectory(createAmigaDirectoryFromDirectory(userVolume.rootDirectory(), unpackedRoot));
         } catch (RuntimeException e) {
-            e.printStackTrace();
+            log(2, "Could not read meta data from disk.");
         }
         return disk;
     }
@@ -171,9 +212,9 @@ public class Indexer {
         amigaFile.setComment(file.comment());
         amigaFile.setModified(file.lastModificationTime());
         amigaFile.setName(file.name());
-        amigaFile.setSize(file.size());
+        byte[] data = null;
         try {
-            amigaFile.setData(file.dataBytes());
+            data = file.dataBytes();
         } catch (RuntimeException e) {
             StringBuilder filePath = new StringBuilder(file.name());
             Directory dir = file.parentDirectory();
@@ -182,14 +223,70 @@ public class Indexer {
                 dir = dir.parentDirectory();
             }
             try {
-                amigaFile.setData(FileUtils.readFileToByteArray(new File(unpackedRoot, filePath.toString())));
+                data = FileUtils.readFileToByteArray(new File(unpackedRoot, filePath.toString()));
             } catch (IOException e2) {
                 log(2, "Can't read data for file: " + filePath);
             }
         }
-        amigaFile.setHashCode(sha1OfByteArray(amigaFile.getData()));
-        amigaFile.setVersion(findVersionInBytes(amigaFile.getData()));
+        if (data != null) {
+            String hashCode = sha1OfByteArray(data);
+            FileData fileData = storage.findFileDataByHashCode(hashCode);
+            if (fileData == null) {
+                fileData = fileDataCache.get(hashCode);
+                if (fileData == null) {
+                    fileData = new FileData();
+                    fileData.setData(data);
+                    fileData.setHashCode(hashCode);
+                    fileData.setSize(file.size());
+                    fileData.setVersion(findVersionInBytes(data));
+                    if (amigaFile.getName().endsWith(".info")) {
+                        processInfoFile(fileData);
+                    }
+                    fileDataCache.put(hashCode, fileData);
+                }
+            }
+            fileData.getAmigaFiles().add(amigaFile);
+            amigaFile.setFileData(fileData);
+        }
         return amigaFile;
+    }
+
+    private void processInfoFile(FileData fileData) {
+        try {
+            AmigaInfoReader info = new AmigaInfoReader(AmigaInfoReader.Palette_2_x());
+            AmigaIcon icon = info.createIcon(fileData.getData());
+            createAddBitmapToAmigaFile(imageToPngByteArray(icon.normalImage()), fileData, false);
+            if (!icon.highlightImage().isEmpty()) {
+                createAddBitmapToAmigaFile(imageToPngByteArray(icon.highlightImage().get()), fileData, true);
+            }
+        } catch (Throwable e) {
+            // Ignore
+        }
+    }
+
+    private void createAddBitmapToAmigaFile(byte[] data, FileData fileData, boolean highlighted) {
+        String hashCode = sha1OfByteArray(data);
+        Bitmap bitmap = storage.findBitmapByHashCode(hashCode);
+        if (bitmap == null) {
+            bitmap = bitmapCache.get(hashCode);
+            if (bitmap == null) {
+                bitmap = new Bitmap();
+                bitmap.setHashCode(hashCode);
+                bitmap.setData(data);
+                bitmap.setHighlighted(highlighted);
+                bitmapCache.put(hashCode, bitmap);
+            }
+        }
+        bitmap.getFileDatas().add(fileData);
+        fileData.getBitmaps().add(bitmap);
+    }
+
+    private byte[] imageToPngByteArray(Image icon) throws IOException {
+        BufferedImage image = new BufferedImage(icon.getWidth(null), icon.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+        image.getGraphics().drawImage(icon, 0, 0, null);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", baos);
+        return baos.toByteArray();
     }
 
     // "\0$VER: programname version.revision (dd.mm.yyyy) comment\0"
@@ -313,17 +410,6 @@ public class Indexer {
         }
     }
 
-    private void processDirectory(File directory, File tempDir) throws IOException {
-        File[] files = directory.listFiles();
-        for (File file : files) {
-            if (file.isDirectory()) {
-                processDirectory(file, tempDir);
-            } else {
-                processFile(file, tempDir);
-            }
-        }
-    }
-
     private void copyAndUnpackFileToTempDir(File file, File tempDir) throws IOException, ZipException {
         log(0, "Copy and unpack \"" + file.getName() + "\"");
         ZipFile zipFile = new ZipFile(file);
@@ -334,7 +420,7 @@ public class Indexer {
         }
     }
 
-    private void log(int ident, String message) {
+    public static void log(int ident, String message) {
         StringBuilder out = new StringBuilder();
         out.append(">>");
         for (int n = 0; n < ident; n++)

@@ -4,9 +4,11 @@
     <class>com.alltheamiga.database.model.AmigaDirectory</class>
     <class>com.alltheamiga.database.model.AmigaDisk</class>
     <class>com.alltheamiga.database.model.AmigaFile</class>
+    <class>com.alltheamiga.database.model.Bitmap</class>
     <class>com.alltheamiga.database.model.Comment</class>
     <class>com.alltheamiga.database.model.DiskRegistration</class>
     <class>com.alltheamiga.database.model.User</class>
+    <class>com.alltheamiga.database.model.FileData</class>
     <properties>
       <property name="javax.persistence.jdbc.driver" value="com.mysql.jdbc.Driver" />
       <property name="javax.persistence.jdbc.url" value="jdbc:mysql://localhost:3306/alltheamiga" />

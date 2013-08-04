@@ -11,6 +11,8 @@ import org.apache.commons.exec.ExecuteException;
 import org.apache.commons.exec.ExecuteWatchdog;
 import org.apache.commons.io.FileUtils;
 
+import com.alltheamiga.indexer.Indexer;
+
 public class XdfTool {
 
     public static void main(String[] args) throws ExecuteException, IOException {
@@ -64,10 +66,9 @@ public class XdfTool {
         try {
             return executor.execute(cmd) == 0;
         } catch (ExecuteException e) {
-            e.printStackTrace();
+            Indexer.log(2, "Could not extract disk contents from: "+fileToUnpack);
             // Ignore and return false
         } catch (IOException e) {
-            e.printStackTrace();
             // Ignore and return false
         }
         return false;
