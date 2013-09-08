@@ -1,5 +1,7 @@
 package com.alltheamiga.database;
 
+import java.util.List;
+
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.FlushModeType;
@@ -8,7 +10,9 @@ import javax.persistence.Persistence;
 import javax.persistence.Query;
 
 import com.alltheamiga.database.model.AmigaDisk;
+import com.alltheamiga.database.model.AmigaFile;
 import com.alltheamiga.database.model.Bitmap;
+import com.alltheamiga.database.model.DiskRegistration;
 import com.alltheamiga.database.model.FileData;
 
 public class Storage {
@@ -66,5 +70,46 @@ public class Storage {
             return null;
         }
     }
+    
+    public AmigaFile findAmigaFileByFileDataHashAndFilename(String fileDataHash, String filename) {
+        try {
+            Query q = manager.createQuery("select a from AmigaFile a where a.name like :filename and a.fileData.hashCode like :hashCode", AmigaFile.class);
+            q.setParameter("hashCode", fileDataHash);
+            q.setParameter("filename", filename);
+            @SuppressWarnings("unchecked")
+            List<AmigaFile> amigaFileList = q.getResultList();
+            if(amigaFileList.size()>0) {
+                return amigaFileList.get(0);
+            } else {
+                return null;
+            }
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
+    
+    public AmigaFile findAmigaFileById(long fileId) {
+        try {
+            Query q = manager.createQuery("select d from AmigaFile d where d.id=:id", AmigaFile.class);
+            q.setParameter("id", fileId);
+            return (AmigaFile) q.getSingleResult();
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
 
+    
+    /******** USED BY WEB (VELOCITY) ********/
+    
+    @SuppressWarnings("unchecked")
+    public List<DiskRegistration> getDiskRegistrations() {
+        Query q = manager.createQuery("select r from DiskRegistration r order by r.filename", DiskRegistration.class);
+        List<DiskRegistration> list = (List<DiskRegistration>) q.getResultList();
+        return list;
+    }
+
+    public AmigaDisk getDiskByHash(String hashCode) {
+        return findAmigaDiskByHashCode(hashCode);
+    }
+    
 }

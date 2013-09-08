@@ -1,6 +1,8 @@
 package com.alltheamiga.database.model;
 
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 
 import javax.persistence.CascadeType;
 import javax.persistence.Column;
@@ -9,6 +11,7 @@ import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
+import javax.persistence.OneToMany;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
 
@@ -23,8 +26,8 @@ public class AmigaDisk {
     @JoinColumn(name = "rootDirectoryId")
     private AmigaDirectory rootDirectory;
     
-    @OneToOne(fetch = FetchType.LAZY, mappedBy = "amigaDisk")
-    private DiskRegistration diskRegistration;
+    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "amigaDisk")
+    private Set<DiskRegistration> diskRegistrations;
     
     private String volumeName;
     private String hashCode;
@@ -41,6 +44,15 @@ public class AmigaDisk {
     private Date modified;
     
     public AmigaDisk() {
+        diskRegistrations = new HashSet<>();
+    }
+    
+    public Set<DiskRegistration> getDiskRegistrations() {
+        return diskRegistrations;
+    }
+    
+    public void setDiskRegistrations(Set<DiskRegistration> diskRegistrations) {
+        this.diskRegistrations = diskRegistrations;
     }
     
     public byte[] getBootBlockData() {
@@ -65,14 +77,6 @@ public class AmigaDisk {
 
     public void setRootDirectory(AmigaDirectory rootDirectory) {
         this.rootDirectory = rootDirectory;
-    }
-
-    public DiskRegistration getDiskRegistration() {
-        return diskRegistration;
-    }
-
-    public void setDiskRegistration(DiskRegistration diskRegistration) {
-        this.diskRegistration = diskRegistration;
     }
 
     public String getVolumeName() {

@@ -112,7 +112,7 @@ public class Indexer {
         checkAndPopulateTosecFilename(filename, diskReg);
 
         AmigaDisk disk = createAmigaDisk(fileToProcess, tempDir);
-        disk.setDiskRegistration(diskReg);
+        disk.getDiskRegistrations().add(diskReg);
         diskReg.setAmigaDisk(disk);
 
         storage.persist(diskReg);

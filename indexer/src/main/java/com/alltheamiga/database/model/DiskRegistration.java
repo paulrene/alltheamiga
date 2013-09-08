@@ -12,8 +12,8 @@ import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
 import javax.persistence.OneToMany;
-import javax.persistence.OneToOne;
 import javax.persistence.Table;
 
 import com.alltheamiga.database.model.types.Chipset;
@@ -21,25 +21,24 @@ import com.alltheamiga.database.model.types.Platform;
 import com.alltheamiga.database.model.types.SoftwareCategory;
 import com.alltheamiga.database.model.types.VideoMode;
 
-
 @Entity
 @Table(name = "diskregistrations")
 public class DiskRegistration {
 
     @Id @GeneratedValue
     private Long id;
-
-    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "amigaDiskId")
     private AmigaDisk amigaDisk;
-    
+
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "diskRegistration")
     private Set<Comment> comments;
 
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "diskRegistration")
     private Set<DiskRegistrationFlag> flags;
     
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "originUserId")
     private User originUser;
 
